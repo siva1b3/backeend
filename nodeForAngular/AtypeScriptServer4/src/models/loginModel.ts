@@ -4,6 +4,7 @@ import { requestLoginType, responseLoginType } from "../types/loginTypes";
 
 async function loginModel(data: requestLoginType): Promise<responseLoginType> {
   try {
+    debugger
     const pool = await poolPromise;
     const loginData = data;
     const query = `
