@@ -7,7 +7,11 @@ interface requestLoginType {
 
 interface responseLoginType {
   isAuth: boolean;
-  userName?: string;
+  EmployeeID?: number;
+  FullName?: string;
+  Email?: string;
+  Age?: number;
+  Gender?: string;
 }
 
 export { responseLoginType, requestLoginType };

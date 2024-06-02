@@ -93,6 +93,10 @@ GO
 ALTER TABLE [dbo].[stcRoles] CHECK CONSTRAINT [FK_stcRoles_stcRoleLevel_RoleLevel]
 GO
 
+CREATE UNIQUE INDEX IX_stcRoles_Role_RoleLevel ON [dbo].[stcRoles]([Role], [RoleLevel]);
+
+
+
 INSERT [dbo].[stcRoles] ([Role], [RoleLevel], [SortOrder], [IsActive], [CreatedBy]) VALUES (N'Chief Executive Officer', N'CEO', 1, 1, 'SYSADMIN')
 GO
 INSERT [dbo].[stcRoles] ([Role], [RoleLevel], [SortOrder], [IsActive], [CreatedBy]) VALUES (N'Chief Financial Officer', N'Other Chiefs', 3, 1, 'SYSADMIN')
@@ -379,6 +383,229 @@ INSERT [dbo].[EmployeeDetails] ( [FullName], [Email], [Age], [Gender], [JoiningD
 GO
 INSERT [dbo].[EmployeeDetails] ( [FullName], [Email], [Age], [Gender], [JoiningDate], [LeavingDate], [CreatedByEmployeeID]) VALUES (N'Victoria Phillips', N'victoria@example.com', 18, N'Female', CAST(N'2022-12-10T00:00:00.000' AS DATETIME), NULL, 2)
 GO
+
+
+
+
+USE [TestMain];
+GO
+
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE FUNCTION dbo.GetManagerIDByRoleHierarchyID (
+    @RoleHierarchyID hierarchyid
+)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @EmployeeID INT;
+    
+    SELECT @EmployeeID = EmployeeID
+    FROM [TestMain].[dbo].[EmployeeRoleHistory]
+    WHERE RoleHierarchyID = @RoleHierarchyID.GetAncestor(1);
+    
+    RETURN @EmployeeID;
+END;
+GO
+
+
+
+USE [TestMain]
+GO
+
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[EmployeeRoleHistory](
+	[RoleHistoryID] [int] IDENTITY(1,1) NOT NULL,
+	[RoleHierarchyID] [hierarchyid] NOT NULL,
+	[EmployeeID] [int] NULL,
+	[Role] [VARCHAR](100) NULL,
+	[RoleLevel] [VARCHAR](50) NULL,
+	[StartDateInRole] [DATETIME] NULL,
+	[EndDateInRole] [DATETIME] NULL,
+    [RoleHierarchyLevel]  AS ([RoleHierarchyID].[GetLevel]()) PERSISTED,
+    [RoleHierarchyManager]  AS ([RoleHierarchyID].[GetAncestor](1)) PERSISTED,
+	[IsLastRole] [BIT] NULL,
+	[IsActive] [BIT] NULL,
+	[CreatedByEmployeeID] [int] NULL,
+	[CreatedTime] [DATETIME] NULL,
+	[ModifiedByEmployeeID] [int] NULL,
+	[ModifiedTime] [DATETIME] NULL,
+	[ModifiedReason] [nVARCHAR](255) NULL,
+ CONSTRAINT [PK_EmployeeRoleHistory_RoleHistoryID] PRIMARY KEY CLUSTERED 
+(
+	[RoleHistoryID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] ADD  CONSTRAINT [DF_EmployeeRoleHistory_IsActive]  DEFAULT ((1)) FOR [IsActive]
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] ADD CONSTRAINT [DF_EmployeeRoleHistory_CreatedTime]  DEFAULT (getdate()) FOR [CreatedTime]
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] WITH CHECK ADD CONSTRAINT [Fk_EmployeeRoleHistory_EmployeeDetails_EmployeeID] FOREIGN KEY ([EmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID]) 
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] CHECK CONSTRAINT  [Fk_EmployeeRoleHistory_EmployeeDetails_EmployeeID] 
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] WITH CHECK ADD CONSTRAINT [Fk_EmployeeRoleHistory_EmployeeDetails_CreatedByEmployeeID_EmployeeID] FOREIGN KEY ([CreatedByEmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID])
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] CHECK CONSTRAINT  [Fk_EmployeeRoleHistory_EmployeeDetails_CreatedByEmployeeID_EmployeeID]
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] WITH CHECK ADD CONSTRAINT [Fk_EmployeeRoleHistory_EmployeeDetails_ModifiedByEmployeeID_EmployeeID] FOREIGN KEY ([ModifiedByEmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID])
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] CHECK CONSTRAINT  [Fk_EmployeeRoleHistory_EmployeeDetails_ModifiedByEmployeeID_EmployeeID]
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] WITH CHECK ADD CONSTRAINT [Fk_EmployeeRoleHistory_stcRoles_RoleRoleLevel] FOREIGN KEY ([Role],[RoleLevel]) REFERENCES [dbo].[stcRoles]([Role],[RoleLevel])
+GO
+
+ALTER TABLE [dbo].[EmployeeRoleHistory] CHECK CONSTRAINT [Fk_EmployeeRoleHistory_stcRoles_RoleRoleLevel]
+GO
+
+
+-- SELECT  
+-- 	[df1].[EmployeeID]
+-- 	, [df1].[RoleLevel] AS [EmpLevel]
+-- 	, [df2].[EmployeeID] AS [ManagerID]
+-- 	, [df2].[RoleLevel] AS [ManagerLevel]
+-- INTO [dbo].[ParentChild]
+-- FROM [TestMain].[dbo].[EmployeeRoleHistory] [df1]
+-- LEFT JOIN [TestMain].[dbo].[EmployeeRoleHistory] [df2]
+-- ON [df2].[RoleHierarchyID] = [df1].[RoleHierarchyID].GetAncestor(1)
+
+
+
+INSERT INTO [TestMain].[dbo].[EmployeeRoleHistory]
+([RoleHierarchyID]
+,[EmployeeID]
+,[Role]
+,[RoleLevel]
+,[StartDateInRole]
+,[IsLastRole]
+,[CreatedByEmployeeID])
+VALUES
+('/',1,'Chief Executive Officer','CEO',GETDATE(),1,1),
+('/1/',2,'Chief Financial Officer','Other Chiefs',GETDATE(),1,1),
+('/3/',3,'Chief Marketing Officer','Other Chiefs',GETDATE(),1,1),
+('/4/',4,'Chief Technology Officer','Other Chiefs',GETDATE(),1,1),
+('/4/1/',5,'Vice President of Engineering','Vice Presidents',GETDATE(),1,4),
+('/4/2/',6,'Vice President of Engineering','Vice Presidents',GETDATE(),1,4),
+('/1/1/',7,'Vice President of Finance','Vice Presidents',GETDATE(),1,1),
+('/1/2/',8,'Vice President of Finance','Vice Presidents',GETDATE(),1,1),
+('/3/1/',9,'Vice President of Marketing','Vice Presidents',GETDATE(),1,3),
+('/3/2/',10,'Vice President of Sales','Vice Presidents',GETDATE(),1,3),
+('/4/1/1/',11,'President of Engineering','President',GETDATE(),1,5),
+('/4/1/2/',12,'President of Engineering','President',GETDATE(),1,5),
+('/4/2/1/',13,'President of Engineering','President',GETDATE(),1,6),
+('/4/2/2/',14,'President of Engineering','President',GETDATE(),1,6),
+('/1/1/1/',15,'President of Finance','President',GETDATE(),1,7),
+('/1/1/2/',16,'President of Finance','President',GETDATE(),1,7),
+('/1/2/1/',17,'President of Finance','President',GETDATE(),1,8),
+('/1/2/1/',18,'President of Finance','President',GETDATE(),1,8),
+('/3/1/1/',19,'President of Marketing','President',GETDATE(),1,9),
+('/3/1/2/',20,'President of Marketing','President',GETDATE(),1,9),
+('/3/2/1/',21,'President of Sales','President',GETDATE(),1,10),
+('/3/2/2/',22,'President of Sales','President',GETDATE(),1,10),
+('/4/1/1/1/',23,'Director of Engineering','Executive Directors',GETDATE(),1,11),
+('/4/1/1/2/',24,'Director of Engineering','Executive Directors',GETDATE(),1,11),
+('/4/1/2/1/',25,'Director of Engineering','Executive Directors',GETDATE(),1,12),
+('/4/1/2/2/',26,'Director of Engineering','Executive Directors',GETDATE(),1,12),
+
+
+
+
+
+USE [TestMain]
+GO
+
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[EmployeeAuth](
+	[AuthID] [int] IDENTITY(1,1) NOT NULL,
+	[EmployeeID] [int] NOT NULL,
+    [Password] [VARCHAR](20) NOT NULL,
+    [AuthBeginDate] [DATETIME] NOT NULL,
+    [AuthEndDate] [DATETIME] NOT NULL,
+    [IsLatest] [BIT] NOT NULL,
+	[CreatedByEmployeeID] [int] NULL,
+	[CreatedTime] [DATETIME] NULL,
+	[ModifiedByEmployeeID] [int] NULL,
+	[ModifiedTime] [DATETIME] NULL,
+	[ModifiedReason] [nVARCHAR](255) NULL,
+ CONSTRAINT [PK_EmployeeAuth_AuthID] PRIMARY KEY CLUSTERED 
+(
+	[AuthID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] ADD  CONSTRAINT [DF_EmployeeAuth_IsLatest]  DEFAULT ((1)) FOR [IsLatest]
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] ADD CONSTRAINT [DF_EmployeeAuth_CreatedTime]  DEFAULT (getdate()) FOR [CreatedTime]
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] WITH CHECK ADD CONSTRAINT [Fk_EmployeeAuth_EmployeeDetails_EmployeeID] FOREIGN KEY ([EmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID]) 
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] CHECK CONSTRAINT  [Fk_EmployeeAuth_EmployeeDetails_EmployeeID] 
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] WITH CHECK ADD CONSTRAINT [Fk_EmployeeAuth_EmployeeDetails_CreatedByEmployeeID_EmployeeID] FOREIGN KEY ([CreatedByEmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID])
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] CHECK CONSTRAINT  [Fk_EmployeeAuth_EmployeeDetails_CreatedByEmployeeID_EmployeeID]
+GO
+
+ALTER TABLE [dbo].[EmployeeAuth] WITH CHECK ADD CONSTRAINT [Fk_EmployeeAuth_EmployeeDetails_ModifiedByEmployeeID_EmployeeID] FOREIGN KEY ([ModifiedByEmployeeID]) REFERENCES [dbo].[EmployeeDetails]([EmployeeID])
+GO
+
+
+USE [TestMain]
+GO
+
+INSERT INTO [dbo].[EmployeeAuth]
+           ([EmployeeID]
+           ,[Password]
+           ,[AuthBeginDate]
+           ,[AuthEndDate]
+           ,[IsLatest])
+     VALUES
+           (1,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (2,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (3,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (4,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (5,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (6,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (7,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (8,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (9,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (10,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (11,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (12,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (13,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1),
+           (14,'siva',GETDATE(),DATEADD(MONTH,6,GETDATE()),1)
+GO
+
 
 
 
