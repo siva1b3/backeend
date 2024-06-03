@@ -8,7 +8,7 @@ import userAuthRoutes from "./routes/userAuthRoutes";
 const app: Application = express();
 
 app.use(cors());
-
+// debugger;
 app.use(express.json());
 
 app.use("/api/locations", locationRoutes);

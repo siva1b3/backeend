@@ -4,24 +4,10 @@ import { requestLoginType, responseLoginType } from "../types/loginTypes";
 
 async function loginModel(data: requestLoginType): Promise<responseLoginType> {
   try {
-    debugger
     const pool = await poolPromise;
     const loginData = data;
-    const query = `
-                    SELECT 
-                        [EmployeeDetails].[EmployeeID]
-                        , [EmployeeDetails].[FullName]
-                        , [EmployeeDetails].[Email]
-                        , [EmployeeDetails].[Age]
-                        , [EmployeeDetails].[Gender]
-                    FROM [dbo].[EmployeeDetails] [EmployeeDetails]
-                    INNER JOIN [dbo].[EmployeeAuth] [EmployeeAuth]
-                    ON [EmployeeAuth].[EmployeeID] = [EmployeeDetails].[EmployeeID]
-                    WHERE 
-                        [EmployeeAuth].[IsLatest] = 1 AND
-                        [EmployeeAuth].[Password] = '${loginData.password}' AND 
-                        [EmployeeDetails].[Email] = '${loginData.userName}'
-    `;
+
+    const query = userAuthQuery(loginData);
 
     const result = await pool.request().query(query);
     console.log(result);
@@ -40,3 +26,22 @@ async function loginModel(data: requestLoginType): Promise<responseLoginType> {
 }
 
 export { loginModel };
+
+function userAuthQuery(loginData: requestLoginType): string {
+  const query: string = `
+SELECT 
+    [EmployeeDetails].[EmployeeID]
+    , [EmployeeDetails].[FullName]
+    , [EmployeeDetails].[Email]
+    , [EmployeeDetails].[Age]
+    , [EmployeeDetails].[Gender]
+FROM [dbo].[EmployeeDetails] [EmployeeDetails]
+INNER JOIN [dbo].[EmployeeAuth] [EmployeeAuth]
+ON [EmployeeAuth].[EmployeeID] = [EmployeeDetails].[EmployeeID]
+WHERE 
+    [EmployeeAuth].[IsLatest] = 1 AND
+    [EmployeeAuth].[Password] = '${loginData.password}' AND 
+    [EmployeeDetails].[Email] = '${loginData.userName}'
+`;
+  return query;
+}
